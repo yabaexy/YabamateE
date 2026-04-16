@@ -20,10 +20,12 @@ import {
   LogOut,
   Menu,
   X,
-  Coins
+  Coins,
+  Sparkles
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { WYDA_CONTRACT_ADDRESS, WYDA_ABI, MOCK_CREATORS } from './constants';
+import MuseSystem from './components/MuseSystem';
 
 export default function App() {
   const [account, setAccount] = useState<string | null>(null);
@@ -33,6 +35,7 @@ export default function App() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [creators, setCreators] = useState<typeof MOCK_CREATORS>(MOCK_CREATORS);
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; message: string }>({ connected: false, message: "Checking database..." });
+  const [view, setView] = useState<'explore' | 'muse'>('explore');
 
   useEffect(() => {
     fetchCreators();
@@ -102,6 +105,36 @@ export default function App() {
   const disconnectWallet = () => {
     setAccount(null);
     setBalance("0");
+    setView('explore');
+  };
+
+  const handleSponsor = async (amount: number) => {
+    if (!account) {
+      connectWallet();
+      return;
+    }
+
+    try {
+      // In a real app, we would perform a blockchain transaction here
+      // const tx = await contract.transfer(creatorAddress, amount);
+      // await tx.wait();
+
+      const res = await fetch('/api/record-sponsorship', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: account, amount })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Successfully sponsored ${amount} WYDA! Your Muse gained EXP and stats!`);
+        // Refresh balance
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        updateBalance(account, provider);
+      }
+    } catch (error) {
+      console.error("Sponsorship failed", error);
+      alert("Sponsorship failed. Please try again.");
+    }
   };
 
   return (
@@ -117,7 +150,18 @@ export default function App() {
           </div>
           
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-500">
-            <button className="hover:text-[#FF424D] transition-colors">Explore</button>
+            <button 
+              onClick={() => { setView('explore'); setSelectedCreator(null); }}
+              className={cn("hover:text-[#FF424D] transition-colors", view === 'explore' && "text-[#FF424D] font-bold")}
+            >
+              Explore
+            </button>
+            <button 
+              onClick={() => setView('muse')}
+              className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5", view === 'muse' && "text-[#FF424D] font-bold")}
+            >
+              <Sparkles size={16} /> YadaMuse
+            </button>
             <button className="hover:text-[#FF424D] transition-colors">How it works</button>
           </div>
         </div>
@@ -134,6 +178,16 @@ export default function App() {
 
           {account ? (
             <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setView('muse')}
+                className="hidden lg:flex items-center gap-2 bg-pink-50 border border-pink-100 rounded-full px-3 py-1.5 hover:bg-pink-100 transition-all group"
+              >
+                <div className="w-6 h-6 rounded-full bg-pink-200 overflow-hidden">
+                  <img src={`https://picsum.photos/seed/muse_thumb_${account}/32/32`} alt="muse" referrerPolicy="no-referrer" />
+                </div>
+                <span className="text-[10px] font-bold text-pink-600 uppercase tracking-wider group-hover:text-pink-700">My Muse</span>
+              </button>
+              <div className="h-8 w-px bg-gray-200 hidden lg:block" />
               <div className="hidden lg:flex flex-col items-end">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Balance</span>
                 <span className="text-sm font-mono font-bold text-[#FF424D]">{parseFloat(balance).toFixed(2)} WYDA</span>
@@ -177,7 +231,39 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-8">
         <AnimatePresence mode="wait">
-          {!selectedCreator ? (
+          {view === 'muse' && account ? (
+            <motion.div
+              key="muse-view"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+            >
+              <div className="mb-12">
+                <h1 className="text-4xl font-black tracking-tight mb-2">YadaMuse</h1>
+                <p className="text-gray-500">Support creators and grow your own Muse.</p>
+              </div>
+              <MuseSystem address={account} />
+            </motion.div>
+          ) : view === 'muse' && !account ? (
+            <motion.div
+              key="muse-auth"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center py-20 text-center"
+            >
+              <div className="w-20 h-20 bg-[#FF424D]/10 text-[#FF424D] rounded-3xl flex items-center justify-center mb-6">
+                <Wallet size={40} />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Wallet Connection Required</h2>
+              <p className="text-gray-500 mb-8 max-w-md">Please connect your wallet to access YadaMuse and start raising your character.</p>
+              <button 
+                onClick={connectWallet}
+                className="bg-[#FF424D] text-white px-8 py-3 rounded-2xl font-bold hover:bg-[#E63B45] transition-all shadow-lg shadow-[#FF424D]/20"
+              >
+                Connect Wallet
+              </button>
+            </motion.div>
+          ) : !selectedCreator ? (
             <motion.div
               key="explore"
               initial={{ opacity: 0, y: 20 }}
@@ -391,7 +477,10 @@ export default function App() {
                               </li>
                             ))}
                           </ul>
-                          <button className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-black transition-all">
+                          <button 
+                            onClick={() => handleSponsor(tier.price)}
+                            className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-black transition-all"
+                          >
                             Join Now
                           </button>
                         </motion.div>

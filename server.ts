@@ -68,7 +68,77 @@ async function startServer() {
     }
   });
 
-  // Initialize Database (Simple migration)
+  // Muse API
+  app.get("/api/muse/:address", async (req, res) => {
+    try {
+      if (!sql) return res.json({ muse: null });
+      const [muse] = await sql`SELECT * FROM muses WHERE user_address = ${req.params.address}`;
+      const [stats] = await sql`SELECT * FROM user_missions WHERE user_address = ${req.params.address}`;
+      res.json({ muse: muse || null, stats: stats || null });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch muse" });
+    }
+  });
+
+  app.post("/api/muse/init", async (req, res) => {
+    const { address, name } = req.body;
+    try {
+      if (!sql) throw new Error("DB not connected");
+      await sql`
+        INSERT INTO muses (user_address, name) 
+        VALUES (${address}, ${name})
+        ON CONFLICT (user_address) DO NOTHING
+      `;
+      await sql`
+        INSERT INTO user_missions (user_address) 
+        VALUES (${address})
+        ON CONFLICT (user_address) DO NOTHING
+      `;
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to init muse" });
+    }
+  });
+
+  app.post("/api/record-sponsorship", async (req, res) => {
+    const { address, amount } = req.body;
+    try {
+      if (!sql) throw new Error("DB not connected");
+      
+      // Update user missions stats
+      await sql`
+        INSERT INTO user_missions (user_address, ymp, daily_sponsorships, daily_amount, weekly_amount, total_amount)
+        VALUES (${address}, 100, 1, ${amount}, ${amount}, ${amount})
+        ON CONFLICT (user_address) DO UPDATE SET
+          ymp = user_missions.ymp + 100,
+          daily_sponsorships = user_missions.daily_sponsorships + 1,
+          daily_amount = user_missions.daily_amount + ${amount},
+          weekly_amount = user_missions.weekly_amount + ${amount},
+          total_amount = user_missions.total_amount + ${amount}
+      `;
+
+      // Update Muse EXP and stats
+      await sql`
+        UPDATE muses SET
+          exp = exp + 50,
+          charm = charm + 1,
+          talent = talent + 1,
+          fanbase = fanbase + 1
+        WHERE user_address = ${address}
+      `;
+
+      // Check for level up
+      const [muse] = await sql`SELECT level, exp FROM muses WHERE user_address = ${address}`;
+      if (muse && muse.exp >= 1000) {
+        await sql`UPDATE muses SET level = level + 1, exp = exp - 1000 WHERE user_address = ${address}`;
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error recording sponsorship:", error);
+      res.status(500).json({ error: "Failed to record sponsorship" });
+    }
+  });
   app.post("/api/init-db", async (req, res) => {
     try {
       if (!sql) throw new Error("DATABASE_URL not set");
@@ -87,13 +157,28 @@ async function startServer() {
       `;
       
       await sql`
-        CREATE TABLE IF NOT EXISTS subscriptions (
-          id SERIAL PRIMARY KEY,
-          user_address TEXT NOT NULL,
-          creator_id TEXT NOT NULL,
-          tier_name TEXT NOT NULL,
-          status TEXT DEFAULT 'active',
+        CREATE TABLE IF NOT EXISTS muses (
+          user_address TEXT PRIMARY KEY,
+          name TEXT DEFAULT 'My Muse',
+          level INTEGER DEFAULT 1,
+          exp INTEGER DEFAULT 0,
+          charm INTEGER DEFAULT 10,
+          talent INTEGER DEFAULT 10,
+          fanbase INTEGER DEFAULT 10,
+          skin_id TEXT DEFAULT 'casual_1',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `;
+      
+      await sql`
+        CREATE TABLE IF NOT EXISTS user_missions (
+          user_address TEXT PRIMARY KEY,
+          ymp INTEGER DEFAULT 0,
+          daily_sponsorships INTEGER DEFAULT 0,
+          daily_amount NUMERIC DEFAULT 0,
+          weekly_amount NUMERIC DEFAULT 0,
+          total_amount NUMERIC DEFAULT 0,
+          last_check_date DATE DEFAULT CURRENT_DATE
         )
       `;
 
