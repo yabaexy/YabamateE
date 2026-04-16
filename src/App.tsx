@@ -152,9 +152,9 @@ export default function App() {
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedCreator(null)}>
             <div className="w-10 h-10 bg-[#FF424D] rounded-full flex items-center justify-center text-white font-bold text-xl">
-              W
+              Y
             </div>
-            <span className="text-xl font-bold tracking-tight hidden sm:block">WYDA Patreon</span>
+            <span className="text-xl font-bold tracking-tight hidden sm:block">Yaba Mate</span>
           </div>
           
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-500">
@@ -539,9 +539,9 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-[#FF424D] rounded-full flex items-center justify-center text-white font-bold text-lg">
-              W
+              Y
             </div>
-            <span className="text-lg font-bold tracking-tight">WYDA Patreon</span>
+            <span className="text-lg font-bold tracking-tight">Yaba Mate</span>
           </div>
           
           <div className="flex gap-8 text-sm font-medium text-gray-400">
