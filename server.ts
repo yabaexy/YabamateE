@@ -100,6 +100,58 @@ async function startServer() {
     }
   });
 
+  app.post("/api/record-game", async (req, res) => {
+    const { address, gameId } = req.body;
+    try {
+      if (!sql) throw new Error("DB not connected");
+      
+      // Get current games played
+      const [stats] = await sql`SELECT games_played, ymp, last_check_date FROM user_missions WHERE user_address = ${address}`;
+      
+      if (!stats) {
+        await sql`INSERT INTO user_missions (user_address) VALUES (${address})`;
+        return res.json({ success: true });
+      }
+
+      let gamesPlayed = stats.games_played || { pong: false, tetris: false, reversi: false, backgammon: false };
+      
+      // Reset if new day
+      const today = new Date().toISOString().split('T')[0];
+      const lastDate = new Date(stats.last_check_date).toISOString().split('T')[0];
+      
+      if (today !== lastDate) {
+        gamesPlayed = { pong: false, tetris: false, reversi: false, backgammon: false };
+      }
+
+      if (!gamesPlayed[gameId]) {
+        gamesPlayed[gameId] = true;
+        
+        let reward = 0;
+        const allPlayed = Object.values(gamesPlayed).every(v => v === true);
+        if (allPlayed) {
+          reward = 200;
+        }
+
+        await sql`
+          UPDATE user_missions SET 
+            games_played = ${JSON.stringify(gamesPlayed)},
+            ymp = ymp + ${reward},
+            last_check_date = CURRENT_DATE
+          WHERE user_address = ${address}
+        `;
+
+        // Also give some EXP to Muse
+        await sql`UPDATE muses SET exp = exp + 10 WHERE user_address = ${address}`;
+
+        return res.json({ success: true, reward, allPlayed });
+      }
+
+      res.json({ success: true, reward: 0, allPlayed: false });
+    } catch (error) {
+      console.error("Error recording game:", error);
+      res.status(500).json({ error: "Failed to record game" });
+    }
+  });
   app.post("/api/record-sponsorship", async (req, res) => {
     const { address, amount } = req.body;
     try {
@@ -178,9 +230,17 @@ async function startServer() {
           daily_amount NUMERIC DEFAULT 0,
           weekly_amount NUMERIC DEFAULT 0,
           total_amount NUMERIC DEFAULT 0,
+          games_played JSONB DEFAULT '{"pong": false, "tetris": false, "reversi": false, "backgammon": false}',
           last_check_date DATE DEFAULT CURRENT_DATE
         )
       `;
+
+      // Migration for existing table
+      try {
+        await sql`ALTER TABLE user_missions ADD COLUMN IF NOT EXISTS games_played JSONB DEFAULT '{"pong": false, "tetris": false, "reversi": false, "backgammon": false}'`;
+      } catch (e) {
+        console.log("Migration check for games_played completed");
+      }
 
       res.json({ message: "Database initialized" });
     } catch (error) {

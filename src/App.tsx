@@ -21,11 +21,13 @@ import {
   Menu,
   X,
   Coins,
-  Sparkles
+  Sparkles,
+  Gamepad2
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { WYDA_CONTRACT_ADDRESS, WYDA_ABI, MOCK_CREATORS } from './constants';
 import MuseSystem from './components/MuseSystem';
+import MiniGames from './components/MiniGames';
 
 export default function App() {
   const [account, setAccount] = useState<string | null>(null);
@@ -34,8 +36,9 @@ export default function App() {
   const [selectedCreator, setSelectedCreator] = useState<typeof MOCK_CREATORS[0] | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [creators, setCreators] = useState<typeof MOCK_CREATORS>(MOCK_CREATORS);
+  const [searchQuery, setSearchQuery] = useState("");
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; message: string }>({ connected: false, message: "Checking database..." });
-  const [view, setView] = useState<'explore' | 'muse'>('explore');
+  const [view, setView] = useState<'explore' | 'muse' | 'games'>('explore');
 
   useEffect(() => {
     fetchCreators();
@@ -137,6 +140,11 @@ export default function App() {
     }
   };
 
+  const filteredCreators = creators.filter(creator => 
+    creator.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    creator.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-[#1A1A1A] font-sans">
       {/* Navigation */}
@@ -161,6 +169,12 @@ export default function App() {
               className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5", view === 'muse' && "text-[#FF424D] font-bold")}
             >
               <Sparkles size={16} /> YadaMuse
+            </button>
+            <button 
+              onClick={() => setView('games')}
+              className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5", view === 'games' && "text-[#FF424D] font-bold")}
+            >
+              <Gamepad2 size={16} /> Games
             </button>
             <button className="hover:text-[#FF424D] transition-colors">How it works</button>
           </div>
@@ -244,7 +258,20 @@ export default function App() {
               </div>
               <MuseSystem address={account} />
             </motion.div>
-          ) : view === 'muse' && !account ? (
+          ) : view === 'games' && account ? (
+            <motion.div
+              key="games-view"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <div className="mb-12">
+                <h1 className="text-4xl font-black tracking-tight mb-2">Mini Games</h1>
+                <p className="text-gray-500">Play games to earn YMP and grow your Muse.</p>
+              </div>
+              <MiniGames address={account} onGameComplete={() => {}} />
+            </motion.div>
+          ) : (view === 'muse' || view === 'games') && !account ? (
             <motion.div
               key="muse-auth"
               initial={{ opacity: 0 }}
@@ -279,26 +306,39 @@ export default function App() {
                     A decentralized sponsorship platform where fans support creators directly using WYDA tokens on the Binance Smart Chain.
                   </p>
                 </div>
-                <div className="flex flex-col items-center md:items-end gap-2">
-                  <div className={cn(
-                    "text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border",
-                    dbStatus.connected ? "bg-green-50 text-green-600 border-green-100" : "bg-amber-50 text-amber-600 border-amber-100"
-                  )}>
-                    {dbStatus.message}
+                <div className="flex flex-col items-center md:items-end gap-4">
+                  <div className="flex flex-col items-center md:items-end gap-2">
+                    <div className={cn(
+                      "text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border",
+                      dbStatus.connected ? "bg-green-50 text-green-600 border-green-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                    )}>
+                      {dbStatus.message}
+                    </div>
+                    {!dbStatus.connected && (
+                      <button 
+                        onClick={initDb}
+                        className="text-[10px] font-bold text-gray-400 hover:text-[#FF424D] underline transition-colors"
+                      >
+                        Initialize Neon DB
+                      </button>
+                    )}
                   </div>
-                  {!dbStatus.connected && (
-                    <button 
-                      onClick={initDb}
-                      className="text-[10px] font-bold text-gray-400 hover:text-[#FF424D] underline transition-colors"
-                    >
-                      Initialize Neon DB
-                    </button>
-                  )}
+                  
+                  <div className="relative w-full max-w-xs">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input 
+                      type="text"
+                      placeholder="Search creators..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3 bg-white border border-gray-100 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-[#FF424D]/20 focus:border-[#FF424D] transition-all"
+                    />
+                  </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {creators.map((creator) => (
+                {filteredCreators.map((creator) => (
                   <motion.div
                     key={creator.id}
                     whileHover={{ y: -5 }}

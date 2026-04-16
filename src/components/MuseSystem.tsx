@@ -32,6 +32,7 @@ interface UserStats {
   daily_amount: number;
   weekly_amount: number;
   total_amount: number;
+  games_played: Record<string, boolean>;
 }
 
 export default function MuseSystem({ address }: { address: string }) {
@@ -103,6 +104,7 @@ export default function MuseSystem({ address }: { address: string }) {
     { id: 3, title: "Visit 5 Muse pages", reward: 350, progress: 2, total: 5, type: 'daily' },
     { id: 4, title: "Weekly 1,800+ WYDA", reward: 9000, progress: stats?.weekly_amount || 0, total: 1800, type: 'weekly' },
     { id: 5, title: "Sponsor 10+ creators", reward: 7500, progress: 4, total: 10, type: 'weekly' },
+    { id: 6, title: "Play all 4 mini-games", reward: 200, progress: stats ? Object.values(stats.games_played || {}).filter(v => v === true).length : 0, total: 4, type: 'daily' },
   ];
 
   return (
