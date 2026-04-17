@@ -1,7 +1,7 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
- */ 
+ */
 
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
@@ -15,9 +15,12 @@ import {
   ExternalLink, 
   ChevronRight, 
   Plus,
+  LayoutDashboard,
+  Settings,
   LogOut,
   Menu,
   X,
+  Coins,
   Sparkles,
   Gamepad2
 } from 'lucide-react';
@@ -25,6 +28,8 @@ import { cn } from './lib/utils';
 import { WYDA_CONTRACT_ADDRESS, WYDA_ABI, MOCK_CREATORS } from './constants';
 import MuseSystem from './components/MuseSystem';
 import MiniGames from './components/MiniGames';
+import CreatorDashboard from './components/CreatorDashboard';
+import EscrowList from './components/EscrowList';
 
 export default function App() {
   const [account, setAccount] = useState<string | null>(null);
@@ -35,7 +40,15 @@ export default function App() {
   const [creators, setCreators] = useState<typeof MOCK_CREATORS>(MOCK_CREATORS);
   const [searchQuery, setSearchQuery] = useState("");
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; message: string }>({ connected: false, message: "Checking database..." });
-  const [view, setView] = useState<'explore' | 'muse' | 'games'>('explore');
+  const [view, setView] = useState<'explore' | 'muse' | 'games' | 'escrow' | 'dashboard'>('explore');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isCreator, setIsCreator] = useState(false);
+
+  const ADMIN_ADDRESSES = [
+    '0xf44d876365611149ebc396def8edd18a83be91c0',
+    '0x8cda9d8b30272a102e0e05A1392A795c267F14bf',
+    '0x2e9bff8bf288ec3ab1dc540b777f9b48276a6286'
+  ].map(a => a.toLowerCase());
 
   useEffect(() => {
     fetchCreators();
@@ -72,6 +85,7 @@ export default function App() {
     }
   };
 
+  // Connect Wallet
   const connectWallet = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
@@ -80,6 +94,7 @@ export default function App() {
         const accounts = await provider.send("eth_requestAccounts", []);
         setAccount(accounts[0]);
         updateBalance(accounts[0], provider);
+        checkAdminAndCreatorStatus(accounts[0]);
       } catch (error) {
         console.error("User denied account access", error);
       } finally {
@@ -101,10 +116,23 @@ export default function App() {
     }
   };
 
+  const checkAdminAndCreatorStatus = async (addr: string) => {
+    setIsAdmin(ADMIN_ADDRESSES.includes(addr.toLowerCase()));
+    try {
+      const res = await fetch(`/api/creator/profile?address=${addr}`);
+      const data = await res.json();
+      setIsCreator(!!data.creator);
+    } catch (e) {
+      console.error("Error checking creator status");
+    }
+  };
+
   const disconnectWallet = () => {
     setAccount(null);
     setBalance("0");
     setView('explore');
+    setIsAdmin(false);
+    setIsCreator(false);
   };
 
   const handleSponsor = async (amount: number) => {
@@ -114,6 +142,10 @@ export default function App() {
     }
 
     try {
+      // In a real app, we would perform a blockchain transaction here
+      // const tx = await contract.transfer(creatorAddress, amount);
+      // await tx.wait();
+
       const res = await fetch('/api/record-sponsorship', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,6 +154,7 @@ export default function App() {
       const data = await res.json();
       if (data.success) {
         alert(`Successfully sponsored ${amount} WYDA! Your Muse gained EXP and stats!`);
+        // Refresh balance
         const provider = new ethers.BrowserProvider(window.ethereum);
         updateBalance(account, provider);
       }
@@ -138,6 +171,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-[#1A1A1A] font-sans">
+      {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-white border-b border-gray-100 px-4 md:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedCreator(null)}>
@@ -146,7 +180,7 @@ export default function App() {
             </div>
             <span className="text-xl font-bold tracking-tight hidden sm:block">Yaba Mate</span>
           </div>
-
+          
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-500">
             <button 
               onClick={() => { setView('explore'); setSelectedCreator(null); }}
@@ -166,6 +200,30 @@ export default function App() {
             >
               <Gamepad2 size={16} /> Games
             </button>
+            {isAdmin && (
+              <button 
+                onClick={() => setView('escrow')}
+                className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5", view === 'escrow' && "text-[#FF424D] font-bold")}
+              >
+                <ShieldCheck size={16} /> Escrow
+              </button>
+            )}
+            {isCreator && (
+              <button 
+                onClick={() => setView('dashboard')}
+                className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5", view === 'dashboard' && "text-[#FF424D] font-bold")}
+              >
+                <LayoutDashboard size={16} /> Dashboard
+              </button>
+            )}
+            {!isCreator && account && (
+              <button 
+                onClick={() => setView('explore')}
+                className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5")}
+              >
+                <Plus size={16} /> Register Plan
+              </button>
+            )}
             <button className="hover:text-[#FF424D] transition-colors">How it works</button>
           </div>
         </div>
@@ -261,7 +319,33 @@ export default function App() {
               </div>
               <MiniGames address={account} onGameComplete={() => {}} />
             </motion.div>
-          ) : (view === 'muse' || view === 'games') && !account ? (
+          ) : view === 'escrow' && account && isAdmin ? (
+            <motion.div
+              key="escrow-view"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+            >
+              <div className="mb-12">
+                <h1 className="text-4xl font-black tracking-tight mb-2">Escrow Monitoring</h1>
+                <p className="text-gray-500">Administrator tool for managing verified sellers and their wallet linked plans.</p>
+              </div>
+              <EscrowList adminAddress={account} />
+            </motion.div>
+          ) : view === 'dashboard' && account && isCreator ? (
+            <motion.div
+              key="dashboard-view"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+            >
+              <div className="mb-12">
+                <h1 className="text-4xl font-black tracking-tight mb-2">Seller Dashboard</h1>
+                <p className="text-gray-500">Manage your subscription plans and account details.</p>
+              </div>
+              <CreatorDashboard address={account} />
+            </motion.div>
+          ) : (view === 'muse' || view === 'games' || view === 'escrow' || view === 'dashboard') && !account ? (
             <motion.div
               key="muse-auth"
               initial={{ opacity: 0 }}
@@ -313,7 +397,7 @@ export default function App() {
                       </button>
                     )}
                   </div>
-
+                  
                   <div className="relative w-full max-w-xs">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input 
@@ -337,14 +421,14 @@ export default function App() {
                   >
                     <div className="h-32 bg-gray-200 relative">
                       <img 
-                        src={creator.cover} 
+                        src={creator.cover || `https://picsum.photos/seed/cover${creator.id}/1200/400`} 
                         alt={creator.name} 
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
                       />
                       <div className="absolute -bottom-10 left-6">
                         <img 
-                          src={creator.avatar} 
+                          src={creator.avatar || `https://picsum.photos/seed/avatar${creator.id}/200/200`} 
                           alt={creator.name} 
                           className="w-20 h-20 rounded-2xl border-4 border-white object-cover shadow-md"
                           referrerPolicy="no-referrer"
@@ -355,7 +439,7 @@ export default function App() {
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xl font-bold group-hover:text-[#FF424D] transition-colors">{creator.name}</h3>
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                          <Users size={12} /> {creator.subscribers}
+                          <Users size={12} /> {creator.subscribers || 0}
                         </span>
                       </div>
                       <p className="text-sm text-gray-500 line-clamp-2 mb-6">
@@ -377,6 +461,40 @@ export default function App() {
                   </motion.div>
                 ))}
 
+                {account && !isCreator && (
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    className="bg-[#FF424D]/5 rounded-3xl border-2 border-dashed border-[#FF424D]/20 p-8 flex flex-col items-center justify-center text-center group cursor-pointer"
+                    onClick={() => {
+                      if (confirm("Do you want to become a creator on Yaba Mate?")) {
+                        fetch('/api/creator/join', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            address: account,
+                            name: 'My Awesome Project',
+                            handle: `@${account.slice(0, 6)}`,
+                            description: 'I am creating amazing content on Yaba Mate!'
+                          })
+                        }).then(r => r.json()).then(data => {
+                          if (data.success) {
+                            setIsCreator(true);
+                            fetchCreators();
+                            alert("Welcome to the Creator community!");
+                          }
+                        });
+                      }
+                    }}
+                  >
+                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-[#FF424D] shadow-sm mb-4 group-hover:rotate-12 transition-transform">
+                      <Plus size={32} />
+                    </div>
+                    <h3 className="text-xl font-bold mb-2">Become a Creator</h3>
+                    <p className="text-sm text-gray-500">Start your own project and earn WYDA from your supporters.</p>
+                  </motion.div>
+                )}
+
+                {/* Create Profile Card */}
                 <motion.div
                   whileHover={{ y: -5 }}
                   className="bg-white rounded-3xl overflow-hidden border-2 border-dashed border-gray-200 flex flex-col items-center justify-center p-8 text-center hover:border-[#FF424D] transition-all cursor-pointer group"
@@ -427,7 +545,7 @@ export default function App() {
                       referrerPolicy="no-referrer"
                     />
                   </div>
-
+                  
                   <div className="pt-20 md:pt-28 flex flex-col md:flex-row md:items-end justify-between gap-6">
                     <div>
                       <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-1">{selectedCreator.name}</h1>
@@ -523,6 +641,7 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+      {/* Footer */}
       <footer className="bg-white border-t border-gray-100 py-12 px-4 md:px-8 mt-20">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-2">
@@ -531,7 +650,7 @@ export default function App() {
             </div>
             <span className="text-lg font-bold tracking-tight">Yaba Mate</span>
           </div>
-
+          
           <div className="flex gap-8 text-sm font-medium text-gray-400">
             <a href="#" className="hover:text-[#FF424D] transition-colors">Privacy</a>
             <a href="#" className="hover:text-[#FF424D] transition-colors">Terms</a>

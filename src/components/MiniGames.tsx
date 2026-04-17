@@ -2,7 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Gamepad2, 
+  Trophy, 
   RotateCcw, 
+  Play, 
+  Pause, 
   ChevronLeft,
   CheckCircle2,
   Zap
@@ -67,7 +70,7 @@ export default function MiniGames({ address, onGameComplete }: { address: string
             id="pong" 
             title="Pong" 
             description="Classic paddle action. Hit the ball back!" 
-            icon={<Gamepad2 />}
+            icon={<Gamepad2 />} 
             played={playedGames.pong}
             onClick={() => setActiveGame('pong')}
           />
@@ -75,7 +78,7 @@ export default function MiniGames({ address, onGameComplete }: { address: string
             id="tetris" 
             title="Tetris" 
             description="Stack blocks and clear lines." 
-            icon={<Gamepad2 />}
+            icon={<Gamepad2 />} 
             played={playedGames.tetris}
             onClick={() => setActiveGame('tetris')}
           />
@@ -83,7 +86,7 @@ export default function MiniGames({ address, onGameComplete }: { address: string
             id="reversi" 
             title="Reversi" 
             description="Flip your opponent's pieces." 
-            icon={<Gamepad2 />}
+            icon={<Gamepad2 />} 
             played={playedGames.reversi}
             onClick={() => setActiveGame('reversi')}
           />
@@ -91,7 +94,7 @@ export default function MiniGames({ address, onGameComplete }: { address: string
             id="backgammon" 
             title="Backgammon" 
             description="Race your checkers to the finish." 
-            icon={<Gamepad2 />}
+            icon={<Gamepad2 />} 
             played={playedGames.backgammon}
             onClick={() => setActiveGame('backgammon')}
           />
@@ -106,9 +109,9 @@ export default function MiniGames({ address, onGameComplete }: { address: string
               <ChevronLeft size={18} /> Back to Games
             </button>
             <h3 className="text-lg font-black capitalize">{activeGame}</h3>
-            <div className="w-20" />
+            <div className="w-20" /> {/* Spacer */}
           </div>
-
+          
           <div className="p-8 flex flex-col items-center justify-center min-h-[400px]">
             {activeGame === 'pong' && <PongGame onComplete={() => recordGamePlay('pong')} />}
             {activeGame === 'tetris' && <TetrisGame onComplete={() => recordGamePlay('tetris')} />}
@@ -145,7 +148,7 @@ export default function MiniGames({ address, onGameComplete }: { address: string
   );
 }
 
-function GameCard({ title, description, icon, played, onClick }: any) {
+function GameCard({ id, title, description, icon, played, onClick }: any) {
   return (
     <motion.div
       whileHover={{ y: -5 }}
@@ -168,6 +171,7 @@ function GameCard({ title, description, icon, played, onClick }: any) {
   );
 }
 
+// --- PONG GAME ---
 function PongGame({ onComplete }: { onComplete: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [score, setScore] = useState(0);
@@ -197,26 +201,33 @@ function PongGame({ onComplete }: { onComplete: () => void }) {
     const gameLoop = () => {
       if (isGameOver) return;
 
+      // Clear
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Draw Paddle
       ctx.fillStyle = '#1A1A1A';
       ctx.fillRect(10, paddleY, paddleWidth, paddleHeight);
 
+      // Draw Ball
       ctx.beginPath();
       ctx.arc(ballX, ballY, 8, 0, Math.PI * 2);
       ctx.fill();
 
+      // Move Ball
       ballX += ballDX;
       ballY += ballDY;
 
+      // Wall Bounce
       if (ballY < 0 || ballY > canvas.height) ballDY = -ballDY;
       if (ballX > canvas.width) ballDX = -ballDX;
 
+      // Paddle Bounce
       if (ballX < 20 && ballY > paddleY && ballY < paddleY + paddleHeight) {
         ballDX = -ballDX;
         setScore(s => s + 1);
       }
 
+      // Game Over
       if (ballX < 0) {
         setIsGameOver(true);
         onComplete();
@@ -253,8 +264,9 @@ function PongGame({ onComplete }: { onComplete: () => void }) {
   );
 }
 
+// --- TETRIS GAME (Simplified) ---
 function TetrisGame({ onComplete }: { onComplete: () => void }) {
-  const [grid] = useState<number[][]>(Array(15).fill(0).map(() => Array(10).fill(0)));
+  const [grid, setGrid] = useState<number[][]>(Array(15).fill(0).map(() => Array(10).fill(0)));
   const [score, setScore] = useState(0);
   const [isGameOver, setIsGameOver] = useState(false);
 
@@ -292,9 +304,10 @@ function TetrisGame({ onComplete }: { onComplete: () => void }) {
   );
 }
 
+// --- REVERSI GAME (Simplified) ---
 function ReversiGame({ onComplete }: { onComplete: () => void }) {
   const [board, setBoard] = useState<number[][]>(Array(8).fill(0).map(() => Array(8).fill(0)));
-  const [turn, setTurn] = useState(1);
+  const [turn, setTurn] = useState(1); // 1: Black, 2: White
   const [moves, setMoves] = useState(0);
 
   const handleClick = (x: number, y: number) => {
@@ -338,6 +351,7 @@ function ReversiGame({ onComplete }: { onComplete: () => void }) {
   );
 }
 
+// --- BACKGAMMON GAME (Simplified) ---
 function BackgammonGame({ onComplete }: { onComplete: () => void }) {
   const [dice, setDice] = useState<number[]>([1, 1]);
   const [rolls, setRolls] = useState(0);
@@ -355,7 +369,7 @@ function BackgammonGame({ onComplete }: { onComplete: () => void }) {
   return (
     <div className="flex flex-col items-center gap-12">
       <div className="text-2xl font-black">Rolls: {rolls} / 5</div>
-
+      
       <div className="flex gap-8">
         {dice.map((d, i) => (
           <motion.div 
