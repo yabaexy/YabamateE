@@ -6,7 +6,9 @@ import {
   Calendar, 
   Zap, 
   Heart, 
+  Users, 
   Sparkles, 
+  ChevronRight, 
   Edit2,
   CheckCircle2,
   Lock,
@@ -54,6 +56,7 @@ export default function MuseSystem({ address }: { address: string }) {
         setMuse(data.muse);
         setNewName(data.muse.name);
       } else {
+        // Auto-init if not exists
         await fetch('/api/muse/init', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -91,7 +94,7 @@ export default function MuseSystem({ address }: { address: string }) {
     let age = "child";
     if (muse.level > 50) age = "adult";
     else if (muse.level > 30) age = "teen";
-
+    
     return `https://picsum.photos/seed/muse_${age}_${muse.skin_id}/600/800`;
   };
 
@@ -106,6 +109,7 @@ export default function MuseSystem({ address }: { address: string }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      {/* Character Display */}
       <div className="lg:col-span-5 space-y-6">
         <div className="bg-white rounded-[40px] overflow-hidden border border-gray-100 shadow-xl relative aspect-[3/4] group">
           <img 
@@ -114,7 +118,8 @@ export default function MuseSystem({ address }: { address: string }) {
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
             referrerPolicy="no-referrer"
           />
-
+          
+          {/* Level Badge */}
           <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border border-white/50">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-[#FF424D] rounded-lg flex items-center justify-center text-white font-bold">
@@ -127,6 +132,7 @@ export default function MuseSystem({ address }: { address: string }) {
             </div>
           </div>
 
+          {/* YMP Balance */}
           <div className="absolute top-6 right-6 bg-gray-900/80 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border border-white/10 text-white">
             <div className="flex items-center gap-2">
               <Zap size={16} className="text-yellow-400 fill-yellow-400" />
@@ -134,6 +140,7 @@ export default function MuseSystem({ address }: { address: string }) {
             </div>
           </div>
 
+          {/* Name & Stats Overlay */}
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-8 pt-20">
             <div className="flex items-center gap-3 mb-4">
               {isEditingName ? (
@@ -170,6 +177,7 @@ export default function MuseSystem({ address }: { address: string }) {
           </div>
         </div>
 
+        {/* EXP Bar */}
         <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Experience</span>
@@ -185,6 +193,7 @@ export default function MuseSystem({ address }: { address: string }) {
         </div>
       </div>
 
+      {/* Tabs & Content */}
       <div className="lg:col-span-7 space-y-6">
         <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
           <button 

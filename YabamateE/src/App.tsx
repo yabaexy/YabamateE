@@ -15,9 +15,12 @@ import {
   ExternalLink, 
   ChevronRight, 
   Plus,
+  LayoutDashboard,
+  Settings,
   LogOut,
   Menu,
   X,
+  Coins,
   Sparkles,
   Gamepad2
 } from 'lucide-react';
@@ -72,6 +75,7 @@ export default function App() {
     }
   };
 
+  // Connect Wallet
   const connectWallet = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
@@ -114,6 +118,10 @@ export default function App() {
     }
 
     try {
+      // In a real app, we would perform a blockchain transaction here
+      // const tx = await contract.transfer(creatorAddress, amount);
+      // await tx.wait();
+
       const res = await fetch('/api/record-sponsorship', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,6 +130,7 @@ export default function App() {
       const data = await res.json();
       if (data.success) {
         alert(`Successfully sponsored ${amount} WYDA! Your Muse gained EXP and stats!`);
+        // Refresh balance
         const provider = new ethers.BrowserProvider(window.ethereum);
         updateBalance(account, provider);
       }
@@ -138,6 +147,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-[#1A1A1A] font-sans">
+      {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-white border-b border-gray-100 px-4 md:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedCreator(null)}>
@@ -146,7 +156,7 @@ export default function App() {
             </div>
             <span className="text-xl font-bold tracking-tight hidden sm:block">Yaba Mate</span>
           </div>
-
+          
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-500">
             <button 
               onClick={() => { setView('explore'); setSelectedCreator(null); }}
@@ -313,7 +323,7 @@ export default function App() {
                       </button>
                     )}
                   </div>
-
+                  
                   <div className="relative w-full max-w-xs">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input 
@@ -377,6 +387,7 @@ export default function App() {
                   </motion.div>
                 ))}
 
+                {/* Create Profile Card */}
                 <motion.div
                   whileHover={{ y: -5 }}
                   className="bg-white rounded-3xl overflow-hidden border-2 border-dashed border-gray-200 flex flex-col items-center justify-center p-8 text-center hover:border-[#FF424D] transition-all cursor-pointer group"
@@ -427,7 +438,7 @@ export default function App() {
                       referrerPolicy="no-referrer"
                     />
                   </div>
-
+                  
                   <div className="pt-20 md:pt-28 flex flex-col md:flex-row md:items-end justify-between gap-6">
                     <div>
                       <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-1">{selectedCreator.name}</h1>
@@ -523,6 +534,7 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+      {/* Footer */}
       <footer className="bg-white border-t border-gray-100 py-12 px-4 md:px-8 mt-20">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-2">
@@ -531,7 +543,7 @@ export default function App() {
             </div>
             <span className="text-lg font-bold tracking-tight">Yaba Mate</span>
           </div>
-
+          
           <div className="flex gap-8 text-sm font-medium text-gray-400">
             <a href="#" className="hover:text-[#FF424D] transition-colors">Privacy</a>
             <a href="#" className="hover:text-[#FF424D] transition-colors">Terms</a>
