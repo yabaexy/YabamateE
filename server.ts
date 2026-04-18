@@ -82,9 +82,15 @@ async function startServer() {
           avatar TEXT,
           cover TEXT,
           subscribers INTEGER DEFAULT 0,
-          tiers JSONB
+          tiers JSONB,
+          wallet_address TEXT
         )
       `;
+
+      // Add column if it doesn't exist (primitive migration)
+      try {
+        await sql`ALTER TABLE creators ADD COLUMN IF NOT EXISTS wallet_address TEXT`;
+      } catch (e) { /* already exists */ }
       
       await sql`
         CREATE TABLE IF NOT EXISTS subscriptions (
@@ -101,6 +107,58 @@ async function startServer() {
     } catch (error) {
       console.error("Error initializing DB:", error);
       res.status(500).json({ error: "DB init failed" });
+    }
+  });
+
+  // Update Creator / Register
+  app.post("/api/creators/register", async (req, res) => {
+    const { id, name, handle, description, avatar, cover, tiers, wallet_address } = req.body;
+    try {
+      if (!sql) throw new Error("DATABASE_URL not set");
+      
+      await sql`
+        INSERT INTO creators (id, name, handle, description, avatar, cover, tiers, wallet_address)
+        VALUES (${id}, ${name}, ${handle}, ${description}, ${avatar}, ${cover}, ${JSON.stringify(tiers)}, ${wallet_address})
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          handle = EXCLUDED.handle,
+          description = EXCLUDED.description,
+          avatar = EXCLUDED.avatar,
+          cover = EXCLUDED.cover,
+          tiers = EXCLUDED.tiers,
+          wallet_address = EXCLUDED.wallet_address
+      `;
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error registering creator:", error);
+      res.status(500).json({ error: "Registration failed" });
+    }
+  });
+
+  // Admin: Fetch Escrow List
+  const ADMIN_WALLETS = [
+    '0xf44d876365611149ebc396def8edd18a83be91c0',
+    '0x8Cda9D8b30272A102e0e05A1392A795c267F14Bf',
+    '0x2E9Bff8Bf288ec3AB1Dc540B777f9b48276a6286'
+  ].map(w => w.toLowerCase());
+
+  app.get("/api/admin/escrow", async (req, res) => {
+    const adminAddress = req.query.address as string;
+    if (!adminAddress || !ADMIN_WALLETS.includes(adminAddress.toLowerCase())) {
+        return res.status(403).json({ error: "Access denied" });
+    }
+
+    try {
+      if (!sql) throw new Error("DATABASE_URL not set");
+      const escrowData = await sql`
+        SELECT id, name, wallet_address, tiers 
+        FROM creators 
+        ORDER BY name ASC
+      `;
+      res.json({ escrow: escrowData });
+    } catch (error) {
+      console.error("Error fetching escrow data:", error);
+      res.status(500).json({ error: "Failed to fetch escrow data" });
     }
   });
 
