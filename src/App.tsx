@@ -20,16 +20,10 @@ import {
   LogOut,
   Menu,
   X,
-  Coins,
-  Sparkles,
-  Gamepad2
+  Coins
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { WYDA_CONTRACT_ADDRESS, WYDA_ABI, MOCK_CREATORS } from './constants';
-import MuseSystem from './components/MuseSystem';
-import MiniGames from './components/MiniGames';
-import CreatorDashboard from './components/CreatorDashboard';
-import EscrowList from './components/EscrowList';
 
 export default function App() {
   const [account, setAccount] = useState<string | null>(null);
@@ -38,17 +32,7 @@ export default function App() {
   const [selectedCreator, setSelectedCreator] = useState<typeof MOCK_CREATORS[0] | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [creators, setCreators] = useState<typeof MOCK_CREATORS>(MOCK_CREATORS);
-  const [searchQuery, setSearchQuery] = useState("");
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; message: string }>({ connected: false, message: "Checking database..." });
-  const [view, setView] = useState<'explore' | 'muse' | 'games' | 'escrow' | 'dashboard'>('explore');
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isCreator, setIsCreator] = useState(false);
-
-  const ADMIN_ADDRESSES = [
-    '0xf44d876365611149ebc396def8edd18a83be91c0',
-    '0x8cda9d8b30272a102e0e05A1392A795c267F14bf',
-    '0x2e9bff8bf288ec3ab1dc540b777f9b48276a6286'
-  ].map(a => a.toLowerCase());
 
   useEffect(() => {
     fetchCreators();
@@ -94,7 +78,6 @@ export default function App() {
         const accounts = await provider.send("eth_requestAccounts", []);
         setAccount(accounts[0]);
         updateBalance(accounts[0], provider);
-        checkAdminAndCreatorStatus(accounts[0]);
       } catch (error) {
         console.error("User denied account access", error);
       } finally {
@@ -116,58 +99,10 @@ export default function App() {
     }
   };
 
-  const checkAdminAndCreatorStatus = async (addr: string) => {
-    setIsAdmin(ADMIN_ADDRESSES.includes(addr.toLowerCase()));
-    try {
-      const res = await fetch(`/api/creator/profile?address=${addr}`);
-      const data = await res.json();
-      setIsCreator(!!data.creator);
-    } catch (e) {
-      console.error("Error checking creator status");
-    }
-  };
-
   const disconnectWallet = () => {
     setAccount(null);
     setBalance("0");
-    setView('explore');
-    setIsAdmin(false);
-    setIsCreator(false);
   };
-
-  const handleSponsor = async (amount: number) => {
-    if (!account) {
-      connectWallet();
-      return;
-    }
-
-    try {
-      // In a real app, we would perform a blockchain transaction here
-      // const tx = await contract.transfer(creatorAddress, amount);
-      // await tx.wait();
-
-      const res = await fetch('/api/record-sponsorship', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: account, amount })
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(`Successfully sponsored ${amount} WYDA! Your Muse gained EXP and stats!`);
-        // Refresh balance
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        updateBalance(account, provider);
-      }
-    } catch (error) {
-      console.error("Sponsorship failed", error);
-      alert("Sponsorship failed. Please try again.");
-    }
-  };
-
-  const filteredCreators = creators.filter(creator => 
-    creator.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    creator.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-[#1A1A1A] font-sans">
@@ -176,54 +111,13 @@ export default function App() {
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedCreator(null)}>
             <div className="w-10 h-10 bg-[#FF424D] rounded-full flex items-center justify-center text-white font-bold text-xl">
-              Y
+              W
             </div>
-            <span className="text-xl font-bold tracking-tight hidden sm:block">Yaba Mate</span>
+            <span className="text-xl font-bold tracking-tight hidden sm:block">WYDA Patreon</span>
           </div>
           
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-500">
-            <button 
-              onClick={() => { setView('explore'); setSelectedCreator(null); }}
-              className={cn("hover:text-[#FF424D] transition-colors", view === 'explore' && "text-[#FF424D] font-bold")}
-            >
-              Explore
-            </button>
-            <button 
-              onClick={() => setView('muse')}
-              className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5", view === 'muse' && "text-[#FF424D] font-bold")}
-            >
-              <Sparkles size={16} /> YadaMuse
-            </button>
-            <button 
-              onClick={() => setView('games')}
-              className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5", view === 'games' && "text-[#FF424D] font-bold")}
-            >
-              <Gamepad2 size={16} /> Games
-            </button>
-            {isAdmin && (
-              <button 
-                onClick={() => setView('escrow')}
-                className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5", view === 'escrow' && "text-[#FF424D] font-bold")}
-              >
-                <ShieldCheck size={16} /> Escrow
-              </button>
-            )}
-            {isCreator && (
-              <button 
-                onClick={() => setView('dashboard')}
-                className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5", view === 'dashboard' && "text-[#FF424D] font-bold")}
-              >
-                <LayoutDashboard size={16} /> Dashboard
-              </button>
-            )}
-            {!isCreator && account && (
-              <button 
-                onClick={() => setView('explore')}
-                className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5")}
-              >
-                <Plus size={16} /> Register Plan
-              </button>
-            )}
+            <button className="hover:text-[#FF424D] transition-colors">Explore</button>
             <button className="hover:text-[#FF424D] transition-colors">How it works</button>
           </div>
         </div>
@@ -240,16 +134,6 @@ export default function App() {
 
           {account ? (
             <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setView('muse')}
-                className="hidden lg:flex items-center gap-2 bg-pink-50 border border-pink-100 rounded-full px-3 py-1.5 hover:bg-pink-100 transition-all group"
-              >
-                <div className="w-6 h-6 rounded-full bg-pink-200 overflow-hidden">
-                  <img src={`https://picsum.photos/seed/muse_thumb_${account}/32/32`} alt="muse" referrerPolicy="no-referrer" />
-                </div>
-                <span className="text-[10px] font-bold text-pink-600 uppercase tracking-wider group-hover:text-pink-700">My Muse</span>
-              </button>
-              <div className="h-8 w-px bg-gray-200 hidden lg:block" />
               <div className="hidden lg:flex flex-col items-end">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Balance</span>
                 <span className="text-sm font-mono font-bold text-[#FF424D]">{parseFloat(balance).toFixed(2)} WYDA</span>
@@ -293,78 +177,7 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-8">
         <AnimatePresence mode="wait">
-          {view === 'muse' && account ? (
-            <motion.div
-              key="muse-view"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-            >
-              <div className="mb-12">
-                <h1 className="text-4xl font-black tracking-tight mb-2">YadaMuse</h1>
-                <p className="text-gray-500">Support creators and grow your own Muse.</p>
-              </div>
-              <MuseSystem address={account} />
-            </motion.div>
-          ) : view === 'games' && account ? (
-            <motion.div
-              key="games-view"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-            >
-              <div className="mb-12">
-                <h1 className="text-4xl font-black tracking-tight mb-2">Mini Games</h1>
-                <p className="text-gray-500">Play games to earn YMP and grow your Muse.</p>
-              </div>
-              <MiniGames address={account} onGameComplete={() => {}} />
-            </motion.div>
-          ) : view === 'escrow' && account && isAdmin ? (
-            <motion.div
-              key="escrow-view"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-            >
-              <div className="mb-12">
-                <h1 className="text-4xl font-black tracking-tight mb-2">Escrow Monitoring</h1>
-                <p className="text-gray-500">Administrator tool for managing verified sellers and their wallet linked plans.</p>
-              </div>
-              <EscrowList adminAddress={account} />
-            </motion.div>
-          ) : view === 'dashboard' && account && isCreator ? (
-            <motion.div
-              key="dashboard-view"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-            >
-              <div className="mb-12">
-                <h1 className="text-4xl font-black tracking-tight mb-2">Seller Dashboard</h1>
-                <p className="text-gray-500">Manage your subscription plans and account details.</p>
-              </div>
-              <CreatorDashboard address={account} />
-            </motion.div>
-          ) : (view === 'muse' || view === 'games' || view === 'escrow' || view === 'dashboard') && !account ? (
-            <motion.div
-              key="muse-auth"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center py-20 text-center"
-            >
-              <div className="w-20 h-20 bg-[#FF424D]/10 text-[#FF424D] rounded-3xl flex items-center justify-center mb-6">
-                <Wallet size={40} />
-              </div>
-              <h2 className="text-2xl font-bold mb-2">Wallet Connection Required</h2>
-              <p className="text-gray-500 mb-8 max-w-md">Please connect your wallet to access YadaMuse and start raising your character.</p>
-              <button 
-                onClick={connectWallet}
-                className="bg-[#FF424D] text-white px-8 py-3 rounded-2xl font-bold hover:bg-[#E63B45] transition-all shadow-lg shadow-[#FF424D]/20"
-              >
-                Connect Wallet
-              </button>
-            </motion.div>
-          ) : !selectedCreator ? (
+          {!selectedCreator ? (
             <motion.div
               key="explore"
               initial={{ opacity: 0, y: 20 }}
@@ -380,39 +193,26 @@ export default function App() {
                     A decentralized sponsorship platform where fans support creators directly using WYDA tokens on the Binance Smart Chain.
                   </p>
                 </div>
-                <div className="flex flex-col items-center md:items-end gap-4">
-                  <div className="flex flex-col items-center md:items-end gap-2">
-                    <div className={cn(
-                      "text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border",
-                      dbStatus.connected ? "bg-green-50 text-green-600 border-green-100" : "bg-amber-50 text-amber-600 border-amber-100"
-                    )}>
-                      {dbStatus.message}
-                    </div>
-                    {!dbStatus.connected && (
-                      <button 
-                        onClick={initDb}
-                        className="text-[10px] font-bold text-gray-400 hover:text-[#FF424D] underline transition-colors"
-                      >
-                        Initialize Neon DB
-                      </button>
-                    )}
+                <div className="flex flex-col items-center md:items-end gap-2">
+                  <div className={cn(
+                    "text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border",
+                    dbStatus.connected ? "bg-green-50 text-green-600 border-green-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                  )}>
+                    {dbStatus.message}
                   </div>
-                  
-                  <div className="relative w-full max-w-xs">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input 
-                      type="text"
-                      placeholder="Search creators..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-12 pr-4 py-3 bg-white border border-gray-100 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-[#FF424D]/20 focus:border-[#FF424D] transition-all"
-                    />
-                  </div>
+                  {!dbStatus.connected && (
+                    <button 
+                      onClick={initDb}
+                      className="text-[10px] font-bold text-gray-400 hover:text-[#FF424D] underline transition-colors"
+                    >
+                      Initialize Neon DB
+                    </button>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {filteredCreators.map((creator) => (
+                {creators.map((creator) => (
                   <motion.div
                     key={creator.id}
                     whileHover={{ y: -5 }}
@@ -421,14 +221,14 @@ export default function App() {
                   >
                     <div className="h-32 bg-gray-200 relative">
                       <img 
-                        src={creator.cover || `https://picsum.photos/seed/cover${creator.id}/1200/400`} 
+                        src={creator.cover} 
                         alt={creator.name} 
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
                       />
                       <div className="absolute -bottom-10 left-6">
                         <img 
-                          src={creator.avatar || `https://picsum.photos/seed/avatar${creator.id}/200/200`} 
+                          src={creator.avatar} 
                           alt={creator.name} 
                           className="w-20 h-20 rounded-2xl border-4 border-white object-cover shadow-md"
                           referrerPolicy="no-referrer"
@@ -439,7 +239,7 @@ export default function App() {
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xl font-bold group-hover:text-[#FF424D] transition-colors">{creator.name}</h3>
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                          <Users size={12} /> {creator.subscribers || 0}
+                          <Users size={12} /> {creator.subscribers}
                         </span>
                       </div>
                       <p className="text-sm text-gray-500 line-clamp-2 mb-6">
@@ -460,39 +260,6 @@ export default function App() {
                     </div>
                   </motion.div>
                 ))}
-
-                {account && !isCreator && (
-                  <motion.div
-                    whileHover={{ scale: 1.02 }}
-                    className="bg-[#FF424D]/5 rounded-3xl border-2 border-dashed border-[#FF424D]/20 p-8 flex flex-col items-center justify-center text-center group cursor-pointer"
-                    onClick={() => {
-                      if (confirm("Do you want to become a creator on Yaba Mate?")) {
-                        fetch('/api/creator/join', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            address: account,
-                            name: 'My Awesome Project',
-                            handle: `@${account.slice(0, 6)}`,
-                            description: 'I am creating amazing content on Yaba Mate!'
-                          })
-                        }).then(r => r.json()).then(data => {
-                          if (data.success) {
-                            setIsCreator(true);
-                            fetchCreators();
-                            alert("Welcome to the Creator community!");
-                          }
-                        });
-                      }
-                    }}
-                  >
-                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-[#FF424D] shadow-sm mb-4 group-hover:rotate-12 transition-transform">
-                      <Plus size={32} />
-                    </div>
-                    <h3 className="text-xl font-bold mb-2">Become a Creator</h3>
-                    <p className="text-sm text-gray-500">Start your own project and earn WYDA from your supporters.</p>
-                  </motion.div>
-                )}
 
                 {/* Create Profile Card */}
                 <motion.div
@@ -624,10 +391,7 @@ export default function App() {
                               </li>
                             ))}
                           </ul>
-                          <button 
-                            onClick={() => handleSponsor(tier.price)}
-                            className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-black transition-all"
-                          >
+                          <button className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-black transition-all">
                             Join Now
                           </button>
                         </motion.div>
@@ -646,9 +410,9 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-[#FF424D] rounded-full flex items-center justify-center text-white font-bold text-lg">
-              Y
+              W
             </div>
-            <span className="text-lg font-bold tracking-tight">Yaba Mate</span>
+            <span className="text-lg font-bold tracking-tight">WYDA Patreon</span>
           </div>
           
           <div className="flex gap-8 text-sm font-medium text-gray-400">
