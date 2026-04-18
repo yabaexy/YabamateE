@@ -2,11 +2,10 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import { neon } from "@neondatabase/serverless";
-import { put } from "@vercel/blob";
 import multer from "multer";
 import cors from "cors";
 import dotenv from "dotenv";
+import { ensureMissionRow, ensureMuseRow, ensureSchema, getSql, seedCreators } from "./lib/db";
 
 dotenv.config();
 
@@ -20,24 +19,32 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
-  // Neon DB Client
-  const sql = process.env.DATABASE_URL ? neon(process.env.DATABASE_URL) : null;
+  const upload = multer({ storage: multer.memoryStorage() });
 
-  // Multer for file uploads
-  const upload = multer({ storage: multer.memoryBuffer() });
-
-  // API Routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });
 
-  // Fetch Creators
   app.get("/api/creators", async (req, res) => {
     try {
+      const sql = getSql();
       if (!sql) {
-        return res.json({ creators: [] }); // Fallback or mock
+        return res.json({ creators: [] });
       }
-      const creators = await sql`SELECT * FROM creators ORDER BY subscribers DESC`;
+      await ensureSchema();
+      let creators = await sql`
+        SELECT id, name, handle, description, avatar, cover, subscribers, tiers
+        FROM creators
+        ORDER BY subscribers DESC, name ASC
+      `;
+      if (!creators || creators.length === 0) {
+        await seedCreators(sql);
+        creators = await sql`
+          SELECT id, name, handle, description, avatar, cover, subscribers, tiers
+          FROM creators
+          ORDER BY subscribers DESC, name ASC
+        `;
+      }
       res.json({ creators });
     } catch (error) {
       console.error("Error fetching creators:", error);
@@ -45,33 +52,21 @@ async function startServer() {
     }
   });
 
-  // Upload to Vercel Blob
   app.post("/api/upload", upload.single("file"), async (req: any, res) => {
     try {
-      if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded" });
-      }
-
-      if (!process.env.BLOB_READ_WRITE_TOKEN) {
-        return res.status(500).json({ error: "Vercel Blob token not configured" });
-      }
-
-      const blob = await put(req.file.originalname, req.file.buffer, {
-        access: "public",
-        token: process.env.BLOB_READ_WRITE_TOKEN,
-      });
-
-      res.json(blob);
+      res.status(501).json({ error: "Upload is not wired for Vercel in this migration" });
     } catch (error) {
-      console.error("Error uploading to Vercel Blob:", error);
+      console.error("Error uploading:", error);
       res.status(500).json({ error: "Upload failed" });
     }
   });
 
-  // Muse API
   app.get("/api/muse/:address", async (req, res) => {
     try {
-      if (!sql) return res.json({ muse: null });
+      const sql = getSql();
+      if (!sql) return res.json({ muse: null, stats: null });
+
+      await ensureSchema();
       const [muse] = await sql`SELECT * FROM muses WHERE user_address = ${req.params.address}`;
       const [stats] = await sql`SELECT * FROM user_missions WHERE user_address = ${req.params.address}`;
       res.json({ muse: muse || null, stats: stats || null });
@@ -83,65 +78,75 @@ async function startServer() {
   app.post("/api/muse/init", async (req, res) => {
     const { address, name } = req.body;
     try {
+      const sql = getSql();
       if (!sql) throw new Error("DB not connected");
-      await sql`
-        INSERT INTO muses (user_address, name) 
-        VALUES (${address}, ${name})
-        ON CONFLICT (user_address) DO NOTHING
-      `;
-      await sql`
-        INSERT INTO user_missions (user_address) 
-        VALUES (${address})
-        ON CONFLICT (user_address) DO NOTHING
-      `;
+      await ensureSchema();
+      await ensureMuseRow(sql, address, name || "My Muse");
+      await ensureMissionRow(sql, address);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to init muse" });
     }
   });
 
+  app.post("/api/muse/update-name", async (req, res) => {
+    const { address, name } = req.body;
+    try {
+      const sql = getSql();
+      if (!sql) throw new Error("DB not connected");
+      await ensureSchema();
+      await ensureMuseRow(sql, address, name || "My Muse");
+      await sql`
+        UPDATE muses
+        SET name = ${name}
+        WHERE user_address = ${address}
+      `;
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating name:", error);
+      res.status(500).json({ error: "Failed to update name" });
+    }
+  });
+
   app.post("/api/record-game", async (req, res) => {
     const { address, gameId } = req.body;
     try {
+      const sql = getSql();
       if (!sql) throw new Error("DB not connected");
-      
-      // Get current games played
-      const [stats] = await sql`SELECT games_played, ymp, last_check_date FROM user_missions WHERE user_address = ${address}`;
-      
-      if (!stats) {
-        await sql`INSERT INTO user_missions (user_address) VALUES (${address})`;
-        return res.json({ success: true });
+      await ensureSchema();
+      await ensureMuseRow(sql, address);
+      await ensureMissionRow(sql, address);
+
+      const [stats] = await sql`SELECT games_played, last_check_date FROM user_missions WHERE user_address = ${address}`;
+
+      let gamesPlayed = stats?.games_played || { pong: false, tetris: false, reversi: false, backgammon: false };
+      if (typeof gamesPlayed === "string") {
+        gamesPlayed = JSON.parse(gamesPlayed);
       }
 
-      let gamesPlayed = stats.games_played || { pong: false, tetris: false, reversi: false, backgammon: false };
-      
-      // Reset if new day
       const today = new Date().toISOString().split('T')[0];
-      const lastDate = new Date(stats.last_check_date).toISOString().split('T')[0];
-      
+      const lastDate = stats?.last_check_date ? new Date(stats.last_check_date).toISOString().split('T')[0] : today;
+
       if (today !== lastDate) {
         gamesPlayed = { pong: false, tetris: false, reversi: false, backgammon: false };
       }
 
       if (!gamesPlayed[gameId]) {
         gamesPlayed[gameId] = true;
-        
+
         let reward = 0;
         const allPlayed = Object.values(gamesPlayed).every(v => v === true);
-        if (allPlayed) {
-          reward = 200;
-        }
+        if (allPlayed) reward = 200;
 
         await sql`
-          UPDATE user_missions SET 
-            games_played = ${JSON.stringify(gamesPlayed)},
-            ymp = ymp + ${reward},
+          UPDATE user_missions SET
+            games_played = ${JSON.stringify(gamesPlayed)}::jsonb,
+            ymp = COALESCE(ymp, 0) + ${reward},
             last_check_date = CURRENT_DATE
           WHERE user_address = ${address}
         `;
 
-        // Also give some EXP to Muse
-        await sql`UPDATE muses SET exp = exp + 10 WHERE user_address = ${address}`;
+        await sql`UPDATE muses SET exp = COALESCE(exp, 0) + 10 WHERE user_address = ${address}`;
 
         return res.json({ success: true, reward, allPlayed });
       }
@@ -152,37 +157,39 @@ async function startServer() {
       res.status(500).json({ error: "Failed to record game" });
     }
   });
+
   app.post("/api/record-sponsorship", async (req, res) => {
     const { address, amount } = req.body;
     try {
+      const sql = getSql();
       if (!sql) throw new Error("DB not connected");
-      
-      // Update user missions stats
+      await ensureSchema();
+      await ensureMuseRow(sql, address);
+      await ensureMissionRow(sql, address);
+
       await sql`
         INSERT INTO user_missions (user_address, ymp, daily_sponsorships, daily_amount, weekly_amount, total_amount)
         VALUES (${address}, 100, 1, ${amount}, ${amount}, ${amount})
         ON CONFLICT (user_address) DO UPDATE SET
-          ymp = user_missions.ymp + 100,
-          daily_sponsorships = user_missions.daily_sponsorships + 1,
-          daily_amount = user_missions.daily_amount + ${amount},
-          weekly_amount = user_missions.weekly_amount + ${amount},
-          total_amount = user_missions.total_amount + ${amount}
+          ymp = COALESCE(user_missions.ymp, 0) + 100,
+          daily_sponsorships = COALESCE(user_missions.daily_sponsorships, 0) + 1,
+          daily_amount = COALESCE(user_missions.daily_amount, 0) + ${amount},
+          weekly_amount = COALESCE(user_missions.weekly_amount, 0) + ${amount},
+          total_amount = COALESCE(user_missions.total_amount, 0) + ${amount}
       `;
 
-      // Update Muse EXP and stats
       await sql`
         UPDATE muses SET
-          exp = exp + 50,
-          charm = charm + 1,
-          talent = talent + 1,
-          fanbase = fanbase + 1
+          exp = COALESCE(exp, 0) + 50,
+          charm = COALESCE(charm, 10) + 1,
+          talent = COALESCE(talent, 10) + 1,
+          fanbase = COALESCE(fanbase, 10) + 1
         WHERE user_address = ${address}
       `;
 
-      // Check for level up
       const [muse] = await sql`SELECT level, exp FROM muses WHERE user_address = ${address}`;
       if (muse && muse.exp >= 1000) {
-        await sql`UPDATE muses SET level = level + 1, exp = exp - 1000 WHERE user_address = ${address}`;
+        await sql`UPDATE muses SET level = COALESCE(level, 1) + 1, exp = COALESCE(exp, 0) - 1000 WHERE user_address = ${address}`;
       }
 
       res.json({ success: true });
@@ -191,57 +198,13 @@ async function startServer() {
       res.status(500).json({ error: "Failed to record sponsorship" });
     }
   });
+
   app.post("/api/init-db", async (req, res) => {
     try {
+      const sql = getSql();
       if (!sql) throw new Error("DATABASE_URL not set");
-      
-      await sql`
-        CREATE TABLE IF NOT EXISTS creators (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          handle TEXT NOT NULL,
-          description TEXT,
-          avatar TEXT,
-          cover TEXT,
-          subscribers INTEGER DEFAULT 0,
-          tiers JSONB
-        )
-      `;
-      
-      await sql`
-        CREATE TABLE IF NOT EXISTS muses (
-          user_address TEXT PRIMARY KEY,
-          name TEXT DEFAULT 'My Muse',
-          level INTEGER DEFAULT 1,
-          exp INTEGER DEFAULT 0,
-          charm INTEGER DEFAULT 10,
-          talent INTEGER DEFAULT 10,
-          fanbase INTEGER DEFAULT 10,
-          skin_id TEXT DEFAULT 'casual_1',
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      `;
-      
-      await sql`
-        CREATE TABLE IF NOT EXISTS user_missions (
-          user_address TEXT PRIMARY KEY,
-          ymp INTEGER DEFAULT 0,
-          daily_sponsorships INTEGER DEFAULT 0,
-          daily_amount NUMERIC DEFAULT 0,
-          weekly_amount NUMERIC DEFAULT 0,
-          total_amount NUMERIC DEFAULT 0,
-          games_played JSONB DEFAULT '{"pong": false, "tetris": false, "reversi": false, "backgammon": false}',
-          last_check_date DATE DEFAULT CURRENT_DATE
-        )
-      `;
-
-      // Migration for existing table
-      try {
-        await sql`ALTER TABLE user_missions ADD COLUMN IF NOT EXISTS games_played JSONB DEFAULT '{"pong": false, "tetris": false, "reversi": false, "backgammon": false}'`;
-      } catch (e) {
-        console.log("Migration check for games_played completed");
-      }
-
+      await ensureSchema();
+      await seedCreators(sql);
       res.json({ message: "Database initialized" });
     } catch (error) {
       console.error("Error initializing DB:", error);
@@ -249,7 +212,6 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

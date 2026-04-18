@@ -1,18 +1,17 @@
-import { ensureSchema, getSql, seedCreators } from '../lib/db';
+import { sql } from './db';
 
-export default async function handler(req: any, res: any) {
+export default async function handler(req, res) {
   try {
-    const sql = getSql();
-    if (!sql) {
-      return res.status(500).json({ error: 'DATABASE_URL not set' });
-    }
-
-    await ensureSchema();
-    await seedCreators(sql);
-
-    res.status(200).json({ ok: true, message: 'Database initialized' });
-  } catch (error) {
-    console.error('Error initializing DB:', error);
+    await sql`
+      CREATE TABLE IF NOT EXISTS creators (
+        id TEXT PRIMARY KEY,
+        wallet_address TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        handle TEXT NOT NULL
+      )
+    `;
+    res.status(200).json({ ok: true });
+  } catch (e) {
     res.status(500).json({ error: 'DB init failed' });
   }
 }
