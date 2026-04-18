@@ -1,11 +1,14 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
- */ 
+ */
 
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { motion, AnimatePresence } from 'motion/react';
+import GamePortal from './components/games/GamePortal';
+import EscrowView from './components/EscrowView';
+import CreatorPanel from './components/CreatorPanel';
 import { 
   Wallet, 
   Search, 
@@ -15,31 +18,41 @@ import {
   ExternalLink, 
   ChevronRight, 
   Plus,
+  LayoutDashboard,
+  Settings,
   LogOut,
   Menu,
   X,
-  Sparkles,
-  Gamepad2
+  Gamepad2,
+  Coins,
+  ShieldAlert
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { WYDA_CONTRACT_ADDRESS, WYDA_ABI, MOCK_CREATORS } from './constants';
-import MuseSystem from './components/MuseSystem';
-import MiniGames from './components/MiniGames';
 
 export default function App() {
   const [account, setAccount] = useState<string | null>(null);
   const [balance, setBalance] = useState<string>("0");
+  const [ympBalance, setYmpBalance] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [selectedCreator, setSelectedCreator] = useState<typeof MOCK_CREATORS[0] | null>(null);
+  const [view, setView] = useState<'explore' | 'games' | 'escrow' | 'creator'>('explore');
   const [isConnecting, setIsConnecting] = useState(false);
   const [creators, setCreators] = useState<typeof MOCK_CREATORS>(MOCK_CREATORS);
-  const [searchQuery, setSearchQuery] = useState("");
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; message: string }>({ connected: false, message: "Checking database..." });
-  const [view, setView] = useState<'explore' | 'muse' | 'games'>('explore');
 
   useEffect(() => {
     fetchCreators();
+    // Load YMP balance
+    const saved = localStorage.getItem('yaba_ymp');
+    if (saved) setYmpBalance(parseInt(saved, 10));
   }, []);
+
+  const handleYmpUpdate = (newBalance: number) => {
+    setYmpBalance(newBalance);
+    localStorage.setItem('yaba_ymp', newBalance.toString());
+  };
 
   const fetchCreators = async () => {
     try {
@@ -72,6 +85,7 @@ export default function App() {
     }
   };
 
+  // Connect Wallet
   const connectWallet = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
@@ -107,91 +121,87 @@ export default function App() {
     setView('explore');
   };
 
-  const handleSponsor = async (amount: number) => {
-    if (!account) {
-      connectWallet();
-      return;
-    }
+  const ADMIN_WALLETS = [
+    '0xf44d876365611149ebc396def8edd18a83be91c0',
+    '0x8Cda9D8b30272A102e0e05A1392A795c267F14Bf',
+    '0x2E9Bff8Bf288ec3AB1Dc540B777f9b48276a6286'
+  ].map(w => w.toLowerCase());
 
-    try {
-      const res = await fetch('/api/record-sponsorship', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: account, amount })
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(`Successfully sponsored ${amount} WYDA! Your Muse gained EXP and stats!`);
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        updateBalance(account, provider);
-      }
-    } catch (error) {
-      console.error("Sponsorship failed", error);
-      alert("Sponsorship failed. Please try again.");
-    }
-  };
-
-  const filteredCreators = creators.filter(creator => 
-    creator.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    creator.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const isAdmin = account && ADMIN_WALLETS.includes(account.toLowerCase());
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-[#1A1A1A] font-sans">
+      {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-white border-b border-gray-100 px-4 md:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedCreator(null)}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setSelectedCreator(null); setView('explore'); }}>
             <div className="w-10 h-10 bg-[#FF424D] rounded-full flex items-center justify-center text-white font-bold text-xl">
               Y
             </div>
             <span className="text-xl font-bold tracking-tight hidden sm:block">Yaba Mate</span>
           </div>
-
-          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-500">
+          
+          <div className="hidden md:flex items-center gap-6 text-sm font-bold text-gray-500">
             <button 
-              onClick={() => { setView('explore'); setSelectedCreator(null); }}
-              className={cn("hover:text-[#FF424D] transition-colors", view === 'explore' && "text-[#FF424D] font-bold")}
+              onClick={() => setView('explore')}
+              className={cn("transition-colors hover:text-[#FF424D]", view === 'explore' ? 'text-[#FF424D]' : 'text-gray-400')}
             >
               Explore
             </button>
             <button 
-              onClick={() => setView('muse')}
-              className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5", view === 'muse' && "text-[#FF424D] font-bold")}
+                onClick={() => setView('games')}
+                className={cn("transition-colors hover:text-[#FF424D] flex items-center gap-1.5", view === 'games' ? 'text-[#FF424D]' : 'text-gray-400')}
             >
-              <Sparkles size={16} /> YadaMuse
+              <Gamepad2 size={18} /> Mini Games
             </button>
-            <button 
-              onClick={() => setView('games')}
-              className={cn("hover:text-[#FF424D] transition-colors flex items-center gap-1.5", view === 'games' && "text-[#FF424D] font-bold")}
-            >
-              <Gamepad2 size={16} /> Games
-            </button>
-            <button className="hover:text-[#FF424D] transition-colors">How it works</button>
+            {account && (
+              <button 
+                  onClick={() => setView('creator')}
+                  className={cn("transition-colors hover:text-[#FF424D] flex items-center gap-1.5", view === 'creator' ? 'text-[#FF424D]' : 'text-gray-400')}
+              >
+                <LayoutDashboard size={18} /> Creator Panel
+              </button>
+            )}
+            {isAdmin && (
+               <button 
+                  onClick={() => setView('escrow')}
+                  className={cn("transition-colors hover:text-[#FF424D] flex items-center gap-1.5", view === 'escrow' ? 'text-[#FF424D]' : 'text-gray-400')}
+               >
+                 <ShieldAlert size={18} /> Escrow
+               </button>
+            )}
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center bg-gray-100 rounded-full px-4 py-2 gap-2">
-            <Search size={16} className="text-gray-400" />
+          <div className="hidden lg:flex flex-col items-end mr-4">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">YMP Points</span>
+            <div className="flex items-center gap-1 text-[#FF424D] font-black">
+                <Coins size={14} /> {ympBalance}
+            </div>
+            <div className="text-[8px] text-gray-400 mt-0.5">≈ {(ympBalance / 2000).toFixed(4)} YDA</div>
+          </div>
+          <div className="hidden sm:flex items-center bg-gray-100 rounded-full px-4 py-2 gap-2 focus-within:ring-2 focus-within:ring-[#FF424D]/20 transition-all">
+            <Search size={16} className={cn("transition-colors", searchQuery ? "text-[#FF424D]" : "text-gray-400")} />
             <input 
               type="text" 
               placeholder="Find a creator" 
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (view !== 'explore') setView('explore');
+              }}
               className="bg-transparent border-none focus:outline-none text-sm w-32 md:w-48"
             />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} className="text-gray-400 hover:text-[#FF424D]">
+                <X size={14} />
+              </button>
+            )}
           </div>
 
           {account ? (
             <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setView('muse')}
-                className="hidden lg:flex items-center gap-2 bg-pink-50 border border-pink-100 rounded-full px-3 py-1.5 hover:bg-pink-100 transition-all group"
-              >
-                <div className="w-6 h-6 rounded-full bg-pink-200 overflow-hidden">
-                  <img src={`https://picsum.photos/seed/muse_thumb_${account}/32/32`} alt="muse" referrerPolicy="no-referrer" />
-                </div>
-                <span className="text-[10px] font-bold text-pink-600 uppercase tracking-wider group-hover:text-pink-700">My Muse</span>
-              </button>
-              <div className="h-8 w-px bg-gray-200 hidden lg:block" />
               <div className="hidden lg:flex flex-col items-end">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Balance</span>
                 <span className="text-sm font-mono font-bold text-[#FF424D]">{parseFloat(balance).toFixed(2)} WYDA</span>
@@ -235,51 +245,25 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-8">
         <AnimatePresence mode="wait">
-          {view === 'muse' && account ? (
+          {view === 'games' ? (
             <motion.div
-              key="muse-view"
-              initial={{ opacity: 0, scale: 0.95 }}
+              key="games-portal"
+              initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              exit={{ opacity: 0, scale: 0.98 }}
             >
-              <div className="mb-12">
-                <h1 className="text-4xl font-black tracking-tight mb-2">YadaMuse</h1>
-                <p className="text-gray-500">Support creators and grow your own Muse.</p>
-              </div>
-              <MuseSystem address={account} />
+                <div className="text-center mb-12">
+                    <h1 className="text-4xl md:text-5xl font-black mb-4">Game Station</h1>
+                    <p className="text-gray-500 max-w-xl mx-auto">
+                        Complete your daily quest by playing all available games. Each daily completion earns you 200 YMP!
+                    </p>
+                </div>
+                <GamePortal currentBalance={ympBalance} onBalanceUpdate={handleYmpUpdate} />
             </motion.div>
-          ) : view === 'games' && account ? (
-            <motion.div
-              key="games-view"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-            >
-              <div className="mb-12">
-                <h1 className="text-4xl font-black tracking-tight mb-2">Mini Games</h1>
-                <p className="text-gray-500">Play games to earn YMP and grow your Muse.</p>
-              </div>
-              <MiniGames address={account} onGameComplete={() => {}} />
-            </motion.div>
-          ) : (view === 'muse' || view === 'games') && !account ? (
-            <motion.div
-              key="muse-auth"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center py-20 text-center"
-            >
-              <div className="w-20 h-20 bg-[#FF424D]/10 text-[#FF424D] rounded-3xl flex items-center justify-center mb-6">
-                <Wallet size={40} />
-              </div>
-              <h2 className="text-2xl font-bold mb-2">Wallet Connection Required</h2>
-              <p className="text-gray-500 mb-8 max-w-md">Please connect your wallet to access YadaMuse and start raising your character.</p>
-              <button 
-                onClick={connectWallet}
-                className="bg-[#FF424D] text-white px-8 py-3 rounded-2xl font-bold hover:bg-[#E63B45] transition-all shadow-lg shadow-[#FF424D]/20"
-              >
-                Connect Wallet
-              </button>
-            </motion.div>
+          ) : view === 'escrow' && isAdmin ? (
+             <EscrowView adminAddress={account!} />
+          ) : view === 'creator' && account ? (
+             <CreatorPanel account={account} onUpdate={fetchCreators} />
           ) : !selectedCreator ? (
             <motion.div
               key="explore"
@@ -290,93 +274,130 @@ export default function App() {
               <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div className="text-center md:text-left">
                   <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">
-                    Support your favorite creators <br className="hidden md:block" /> with <span className="text-[#FF424D]">WYDA</span>
+                    The Ultimate Companion <br className="hidden md:block" /> for <span className="text-[#FF424D]">Yaba Mate</span>
                   </h1>
                   <p className="text-lg text-gray-500 max-w-2xl">
-                    A decentralized sponsorship platform where fans support creators directly using WYDA tokens on the Binance Smart Chain.
+                    Whether you're supporting creators or playing mini-games, earn YMP and be part of the most vibrant ecosystem.
                   </p>
-                </div>
-                <div className="flex flex-col items-center md:items-end gap-4">
-                  <div className="flex flex-col items-center md:items-end gap-2">
-                    <div className={cn(
-                      "text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border",
-                      dbStatus.connected ? "bg-green-50 text-green-600 border-green-100" : "bg-amber-50 text-amber-600 border-amber-100"
-                    )}>
-                      {dbStatus.message}
+                  
+                  {/* Search Bar for Explore Page */}
+                  <div className="mt-8 relative max-w-md">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Search size={20} className={cn("transition-colors", searchQuery ? "text-[#FF424D]" : "text-gray-400")} />
                     </div>
-                    {!dbStatus.connected && (
+                    <input
+                      type="text"
+                      placeholder="Search creators by name or description..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="block w-full pl-12 pr-4 py-4 bg-white border border-gray-100 rounded-[20px] shadow-sm focus:ring-4 focus:ring-[#FF424D]/5 focus:border-[#FF424D] transition-all text-base placeholder:text-gray-400"
+                    />
+                    {searchQuery && (
                       <button 
-                        onClick={initDb}
-                        className="text-[10px] font-bold text-gray-400 hover:text-[#FF424D] underline transition-colors"
+                        onClick={() => setSearchQuery("")}
+                        className="absolute inset-y-0 right-4 flex items-center text-gray-400 hover:text-[#FF424D] transition-colors"
                       >
-                        Initialize Neon DB
+                        <X size={20} />
                       </button>
                     )}
                   </div>
-
-                  <div className="relative w-full max-w-xs">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input 
-                      type="text"
-                      placeholder="Search creators..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-12 pr-4 py-3 bg-white border border-gray-100 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-[#FF424D]/20 focus:border-[#FF424D] transition-all"
-                    />
+                </div>
+                <div className="flex flex-col items-center md:items-end gap-2">
+                  <div className={cn(
+                    "text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border",
+                    dbStatus.connected ? "bg-green-50 text-green-600 border-green-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                  )}>
+                    {dbStatus.message}
                   </div>
+                  {!dbStatus.connected && (
+                    <button 
+                      onClick={initDb}
+                      className="text-[10px] font-bold text-gray-400 hover:text-[#FF424D] underline transition-colors"
+                    >
+                      Initialize Neon DB
+                    </button>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {filteredCreators.map((creator) => (
-                  <motion.div
-                    key={creator.id}
-                    whileHover={{ y: -5 }}
-                    className="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group"
-                    onClick={() => setSelectedCreator(creator)}
-                  >
-                    <div className="h-32 bg-gray-200 relative">
-                      <img 
-                        src={creator.cover} 
-                        alt={creator.name} 
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute -bottom-10 left-6">
-                        <img 
-                          src={creator.avatar} 
-                          alt={creator.name} 
-                          className="w-20 h-20 rounded-2xl border-4 border-white object-cover shadow-md"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                    </div>
-                    <div className="pt-12 p-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-xl font-bold group-hover:text-[#FF424D] transition-colors">{creator.name}</h3>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                          <Users size={12} /> {creator.subscribers}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-500 line-clamp-2 mb-6">
-                        {creator.description}
-                      </p>
-                      <div className="flex items-center justify-between">
-                        <div className="flex -space-x-2">
-                          {[1, 2, 3].map(i => (
-                            <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gray-100 overflow-hidden">
-                              <img src={`https://picsum.photos/seed/fan${i+creator.id}/32/32`} alt="fan" referrerPolicy="no-referrer" />
-                            </div>
-                          ))}
+                {creators
+                  .filter(c => 
+                    c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    c.description.toLowerCase().includes(searchQuery.toLowerCase())
+                  ).length > 0 ? (
+                  creators
+                    .filter(c => 
+                      c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                      c.description.toLowerCase().includes(searchQuery.toLowerCase())
+                    )
+                    .map((creator) => (
+                      <motion.div
+                        key={creator.id}
+                        whileHover={{ y: -5 }}
+                        className="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group"
+                        onClick={() => setSelectedCreator(creator)}
+                      >
+                        <div className="h-32 bg-gray-200 relative">
+                          <img 
+                            src={creator.cover} 
+                            alt={creator.name} 
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute -bottom-10 left-6">
+                            <img 
+                              src={creator.avatar} 
+                              alt={creator.name} 
+                              className="w-20 h-20 rounded-2xl border-4 border-white object-cover shadow-md"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
                         </div>
-                        <button className="text-sm font-bold text-[#FF424D] flex items-center gap-1">
-                          View Profile <ChevronRight size={16} />
-                        </button>
-                      </div>
+                        <div className="pt-12 p-6">
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-xl font-bold group-hover:text-[#FF424D] transition-colors">{creator.name}</h3>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                              <Users size={12} /> {creator.subscribers}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 line-clamp-2 mb-6">
+                            {creator.description}
+                          </p>
+                          <div className="flex items-center justify-between">
+                            <div className="flex -space-x-2">
+                              {[1, 2, 3].map(i => (
+                                <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gray-100 overflow-hidden">
+                                  <img src={`https://picsum.photos/seed/fan${i+creator.id}/32/32`} alt="fan" referrerPolicy="no-referrer" />
+                                </div>
+                              ))}
+                            </div>
+                            <button className="text-sm font-bold text-[#FF424D] flex items-center gap-1">
+                              View Profile <ChevronRight size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))
+                ) : (
+                  <div className="col-span-full py-20 flex flex-col items-center justify-center text-center">
+                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center text-gray-300 mb-4">
+                      <Search size={40} />
                     </div>
-                  </motion.div>
-                ))}
+                    <h3 className="text-xl font-bold mb-2">No creators found</h3>
+                    <p className="text-gray-500 max-w-sm">
+                      We couldn't find any creators matching "{searchQuery}". Try a different name or description.
+                    </p>
+                    <button 
+                      onClick={() => setSearchQuery("")}
+                      className="mt-6 text-[#FF424D] font-bold hover:underline"
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                )}
 
+                {/* Create Profile Card */}
                 <motion.div
                   whileHover={{ y: -5 }}
                   className="bg-white rounded-3xl overflow-hidden border-2 border-dashed border-gray-200 flex flex-col items-center justify-center p-8 text-center hover:border-[#FF424D] transition-all cursor-pointer group"
@@ -427,7 +448,7 @@ export default function App() {
                       referrerPolicy="no-referrer"
                     />
                   </div>
-
+                  
                   <div className="pt-20 md:pt-28 flex flex-col md:flex-row md:items-end justify-between gap-6">
                     <div>
                       <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-1">{selectedCreator.name}</h1>
@@ -506,10 +527,7 @@ export default function App() {
                               </li>
                             ))}
                           </ul>
-                          <button 
-                            onClick={() => handleSponsor(tier.price)}
-                            className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-black transition-all"
-                          >
+                          <button className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-black transition-all">
                             Join Now
                           </button>
                         </motion.div>
@@ -523,6 +541,7 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+      {/* Footer */}
       <footer className="bg-white border-t border-gray-100 py-12 px-4 md:px-8 mt-20">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-2">
@@ -531,7 +550,7 @@ export default function App() {
             </div>
             <span className="text-lg font-bold tracking-tight">Yaba Mate</span>
           </div>
-
+          
           <div className="flex gap-8 text-sm font-medium text-gray-400">
             <a href="#" className="hover:text-[#FF424D] transition-colors">Privacy</a>
             <a href="#" className="hover:text-[#FF424D] transition-colors">Terms</a>

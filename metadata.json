@@ -1,6 +1,6 @@
 {
   "name": "Yaba Mate",
-  "description": "A Patreon-style sponsorship platform powered by WYDA tokens on the Binance Smart Chain. Support creators with monthly subscriptions in WYDA and grow your Muse.",
+  "description": "Mini-game platform with daily rewards. Play Backgammon, Tetris, Pong, and Reversi to earn YMP tokens.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
